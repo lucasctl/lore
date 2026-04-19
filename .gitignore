@@ -1,0 +1,20 @@
+# Build artifacts
+/target
+
+# Cargo
+.cargo/
+Cargo.lock
+
+# Editor files
+.idea/
+.vscode/
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Coverage and tooling output
+coverage/
+*.profraw
+*.profdata
+llvm-cov-report/
