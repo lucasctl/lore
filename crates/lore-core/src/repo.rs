@@ -2,29 +2,36 @@ use anyhow::Context;
 use git2::Repository;
 use std::path::{Path, PathBuf};
 
-pub struct LorePaths {
-    pub repo: Repository,
+pub const LORE_DIR_NAME: &str = ".lore";
+pub const DB_FILE_NAME: &str = "db.sqlite";
+
+pub struct RepoPaths {
+    pub root: PathBuf,
     pub lore_dir: PathBuf,
     pub db_path: PathBuf,
 }
 
-pub fn discover(start: impl AsRef<Path>) -> anyhow::Result<LorePaths> {
-    let repo = Repository::discover(start)?;
+pub fn discover(start: impl AsRef<Path>) -> anyhow::Result<RepoPaths> {
+    let start = start.as_ref();
+    let repo = Repository::discover(start)
+        .with_context(|| format!("Failed to discover git repository from {}", start.display()))?;
 
     if repo.is_bare() {
         anyhow::bail!("Bare repositories are not supported");
     }
 
-    let repo_path = repo
-        .path()
-        .parent()
-        .context("Failed to get repository path")?
-        .to_path_buf();
+    let root = repo
+        .workdir()
+        .context("Failed to get repository working directory")?
+        .canonicalize()
+        .context("Failed to canonicalize repository root")?;
+    let lore_dir = root.join(LORE_DIR_NAME);
+    let db_path = lore_dir.join(DB_FILE_NAME);
 
-    Ok(LorePaths {
-        repo,
-        lore_dir: repo_path.join(".lore"),
-        db_path: repo_path.join(".lore").join("lore.db"),
+    Ok(RepoPaths {
+        root,
+        lore_dir,
+        db_path,
     })
 }
 
@@ -42,22 +49,34 @@ mod tests {
 
         let paths = discover(&repo_path).unwrap();
         assert_eq!(
-            paths.repo.path().canonicalize().unwrap(),
-            repo_path.join(".git").canonicalize().unwrap()
+            paths.root.canonicalize().unwrap(),
+            repo_path.canonicalize().unwrap()
         );
-        assert_eq!(
-            paths.lore_dir,
-            paths.repo.path().parent().unwrap().join(".lore")
-        );
+        assert_eq!(paths.lore_dir, paths.root.join(LORE_DIR_NAME));
         assert_eq!(
             paths.db_path,
-            paths
-                .repo
-                .path()
-                .parent()
-                .unwrap()
-                .join(".lore")
-                .join("lore.db")
+            paths.root.join(LORE_DIR_NAME).join(DB_FILE_NAME)
+        );
+    }
+
+    #[test]
+    fn test_discover_from_nested_directory() {
+        let dir = tempdir().unwrap();
+        let repo_path = dir.path().join("repo");
+        let nested_path = repo_path.join("src").join("bin");
+        std::fs::create_dir_all(&nested_path).unwrap();
+        Repository::init(&repo_path).unwrap();
+
+        let paths = discover(&nested_path).unwrap();
+
+        assert_eq!(
+            paths.root.canonicalize().unwrap(),
+            repo_path.canonicalize().unwrap()
+        );
+        assert_eq!(paths.lore_dir, paths.root.join(LORE_DIR_NAME));
+        assert_eq!(
+            paths.db_path,
+            paths.root.join(LORE_DIR_NAME).join(DB_FILE_NAME)
         );
     }
 

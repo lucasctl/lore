@@ -3,12 +3,8 @@ use clap::{Parser, Subcommand};
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
-    /// Turn debugging information on
-    #[arg(short, long, action = clap::ArgAction::Count)]
-    debug: u8,
-
     #[command(subcommand)]
-    command: Option<Commands>,
+    command: Commands,
 }
 
 #[derive(Subcommand)]
@@ -21,20 +17,28 @@ enum Commands {
     },
 }
 
-fn scan(reset: bool) {
-    let path = ".";
-    let lore_paths = lore_core::repo::discover(path).expect("Failed to discover repository");
+fn scan(reset: bool) -> anyhow::Result<()> {
+    let lore_paths = lore_core::repo::discover(".")?;
+
     if reset {
-        lore_core::db::reset(&lore_paths.db_path).expect("Failed to reset database");
-        lore_core::db::open(&lore_paths.db_path).expect("Failed to open database");
+        lore_core::db::reset(&lore_paths.db_path)?;
     }
+
+    let _conn = lore_core::db::open(&lore_paths.db_path)?;
+
+    println!("Repository: {}", lore_paths.root.display());
+    println!("Database:   {}", lore_paths.db_path.display());
+    println!("Scan not implemented yet.");
+
+    Ok(())
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    match &cli.command {
-        Some(Commands::Scan { reset }) => scan(*reset),
-        None => {}
+    match cli.command {
+        Commands::Scan { reset } => scan(reset)?,
     }
+
+    Ok(())
 }
