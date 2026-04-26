@@ -62,6 +62,13 @@ pub fn open(path: &Path) -> anyhow::Result<Connection> {
     Ok(conn)
 }
 
+pub fn reset(path: &Path) -> anyhow::Result<()> {
+    if std::fs::metadata(path).is_ok() {
+        std::fs::remove_file(path)?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
